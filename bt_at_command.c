@@ -47,6 +47,7 @@ BOOL atcmd_put_data_string(char * string);
 kal_uint8* atcmd_get_cmdT_data(kal_int32 secs,BOOL isSetData);
 extern YeeLinkStruct gYeeLinkSoc;
 extern void YeeLinkDeviceBack(YEELINK_SOC_CONECT_RESULT result,void *data);
+extern void YeeLink_CloseSocket(void);
 BT_CMD_RSP atcmd_get_bat_voltage(custom_cmdLine *cmd_line);
 kal_uint8   uart_sleep_handle=0;
 kal_uint8   uart_sleep_handle2=0;
@@ -1464,6 +1465,15 @@ void atcmd_set_rev_packet_heard(U8 *ptr,U32 lenth)
 	memset(ptr,0,lenth);
 	sprintf(ptr,"+RIRD: 0,1,1,%d",lenth);
 }
+BT_CMD_RSP atcmd_riclose(custom_cmdLine *cmd_line)
+{
+	if(!strcmp("AT+RICLOSE=0",cmd_line))
+	{
+		bt_print("atcmd close socket!!!");
+		YeeLink_CloseSocket();
+		atcmd_put_data_string("OK");
+	}
+}
 //AT+RISEND=<index>,<count>,<length>,"<content>
 //AT+RISEND=1,1,20,ABCDEFG1234567890123
 BT_CMD_RSP atcmd_risend(custom_cmdLine *cmd_line)
@@ -1714,7 +1724,7 @@ const bt_custom_atcmd bt_custom_cmd_table[ ] =
 	{"AT+RIOPEN",atcmd_riopen},
 
 	{"AT+RISEND",atcmd_risend},
-
+    	{"AT+RICLOSE",atcmd_riclose}
 	//{"AT+CGSN",atcmd_get_imei},
 	//{"AT+CIMI",atcmd_get_imsi},
     {NULL, NULL}
