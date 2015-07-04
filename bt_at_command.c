@@ -1724,7 +1724,7 @@ const bt_custom_atcmd bt_custom_cmd_table[ ] =
 	{"AT+RIOPEN",atcmd_riopen},
 
 	{"AT+RISEND",atcmd_risend},
-    	{"AT+RICLOSE",atcmd_riclose}
+    	{"AT+RICLOSE",atcmd_riclose},
 	//{"AT+CGSN",atcmd_get_imei},
 	//{"AT+CIMI",atcmd_get_imsi},
     {NULL, NULL}
