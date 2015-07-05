@@ -9,8 +9,9 @@ extern void bt_ublox_put_data(kal_uint8 *_data);
 extern char * ubloxAssitBuff;
 YeeLinkStruct gYeeLinkSoc={0};
 extern btGPSInfo GPSInfo;
-extern U8 * soc_rev_buff;
-extern char *risendBuff;
+extern char risendBuff[1024*5];
+extern char soc_rev_buff[1024*5];
+
 void bt_get_imsi_req(void);
 kal_uint32 YeeLink_GetGPRSAccount(void)
 {
@@ -31,10 +32,10 @@ static void YeeLink_Notify_Internal(void* Content)
 	YeeLinkStruct *p = &gYeeLinkSoc;
 	app_soc_notify_ind_struct *soc_notify = (app_soc_notify_ind_struct *) Content;
 	S32 ret = 0;
-	YEELINK_SOC_CONECT_RESULT soc_result;
+	YEELINK_SOC_CONECT_RESULT soc_result=YEELINK_VAIL;
 	if(p->Soc_hand < 0)
 	{
-		p->CallBack(soc_result,(void *)ubloxAssitBuff);
+		p->CallBack(soc_result,NULL);
 		soc_result = YEELINK_FAIL;
 		return;
 	}
@@ -50,12 +51,6 @@ static void YeeLink_Notify_Internal(void* Content)
 			char *data_section = NULL;
 			int buffer_len=0;
 			char tmpHeard[256]={0};
-			if(soc_rev_buff == NULL)
-			{
-				soc_rev_buff = (U8 *)med_alloc_ext_mem(MAX_SOC_BUFFER_SIZE*5);
-			}
-			soc_result = YEELINK_READ_DATA;
-			
 			//读
 			do{
 				ret = soc_recv(p->Soc_hand, (void *)(soc_rev_buff+buffer_len), YEELINK_MAX_RCV_BUFFER_SIZE, 0);
@@ -69,6 +64,7 @@ static void YeeLink_Notify_Internal(void* Content)
 			memcpy(soc_rev_buff,tmpHeard,strlen(tmpHeard));
 			soc_rev_lenth += strlen(tmpHeard);
 			bt_print("rev:[%s]",soc_rev_buff);
+			soc_result=YEELINK_READ_DATA;
 		}
 		break;
 		case SOC_CONNECT:
@@ -203,6 +199,7 @@ BOOL YeeLink_GetSocketStatus(void)
 	}
 
 }
+
 BOOL YeeLink_SetAddr(sockaddr_struct _addr)
 {
 	YeeLinkStruct *p = &gYeeLinkSoc;
@@ -249,7 +246,7 @@ void YeeLinkDeviceBack(YEELINK_SOC_CONECT_RESULT result,void *data)
 		{
 			atcmd_CRLF_to_hex(data,soc_rev_lenth);
 			bt_ublox_put_data((kal_uint8 *)data);
-			med_free_ext_mem((void**)&data);
+			//med_free_ext_mem((void**)&data);
 		}
 	}
 	else if(result == YEELINK_CONECT_SUCCEED)
@@ -259,11 +256,12 @@ void YeeLinkDeviceBack(YEELINK_SOC_CONECT_RESULT result,void *data)
 	}
 	else if(result == YEELINK_SEND_SUCCEED)
 	{
-		if(data != NULL)
-		{
-			med_free_ext_mem((void**)&data);
-			data = NULL;
-		}
+		//if(data != NULL)
+		//{
+		//	med_free_ext_mem((void**)&data);
+		//	data = NULL;
+		//}
+		memset(risendBuff,0,sizeof(risendBuff));
 		atcmd_put_data_string("SEND OK");
 	}
 	else if(result == YEELINK_RECONECT)
@@ -302,10 +300,12 @@ void YeeLink_GetHost_CallBack(void *InMsg)
 		sprintf(str_host,"%d.%d.%d.%d",dns_ind->addr[0],dns_ind->addr[1],dns_ind->addr[2],dns_ind->addr[3]);
 		memcpy(&p->addr2.addr,&dns_ind->addr,sizeof(p->addr2.addr));
 		//bt_print("解析成功:%s",str_host);
+		atcmd_put_data_string("OK");
 	}
 	else
 	{
 		//bt_print("域名解析失败,再来一次");
+		atcmd_put_data_string("ERROR");
 	}
 	count++;
 }

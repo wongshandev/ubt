@@ -1343,8 +1343,7 @@ void bt_atcmd_riopen_timer_out(void)
 	}
 }
 //RIOPEN
-//AT+RIOPEN=[<index>,]<mode>,<IP address>/<domainname>,<port>
-//AT+RIOPEN=[1,]TCP,192.168.1.10/www.baidu.com,8080
+//AT+RIOPEN=0
 BT_CMD_RSP atcmd_riopen(custom_cmdLine *cmd_line)
 {
 	int soc_index,a2;
@@ -1354,43 +1353,29 @@ BT_CMD_RSP atcmd_riopen(custom_cmdLine *cmd_line)
 	char domain[100]={0};
 	YeeLinkStruct *p = &gYeeLinkSoc;
 
-	if(nmea_scanf(cmd_line->character,strlen(cmd_line->character),"AT+RIOPEN=[%d,]%s,%d.%d.%d.%d/%s,%d",&soc_index,mode,&addr.addr[0],&addr.addr[1],&addr.addr[2],&addr.addr[3],domain,&port))
+	if(nmea_scanf(cmd_line->character,strlen(cmd_line->character),"AT+RIOPEN=%d",&a2))
 	{
-		if(!strcmp("UDP",mode))
-		{
-			addr.sock_type=SOC_SOCK_DGRAM;
-		}
-		else
-		addr.sock_type=SOC_SOCK_STREAM;
+		atcmd_put_data_string("OK");
 
-		addr.port = port;
-		addr.addr_len=4;
-		if(YeeLink_SetAddr(addr)==TRUE)
+		if(YeeLink_GetSocketStatus() == TRUE)
 		{
-			atcmd_put_data_string("OK");
-
-			if(YeeLink_GetSocketStatus() == TRUE)
-			{
-				atcmd_put_data_string("ALREAY CONNECT");
-			}
-			else
-			{
-				YeeLink_Conect_Soc(p->addr2,NULL,YeeLinkDeviceBack);
-				StartTimer(BT_AT_SEND_TIMER_OUT,1000*45,bt_atcmd_riopen_timer_out);
-			}
+			atcmd_put_data_string("ALREAY CONNECT");
 		}
 		else
 		{
-			atcmd_put_data_string("ERROR");
+			YeeLink_Conect_Soc(p->addr2,NULL,YeeLinkDeviceBack);
+			StartTimer(BT_AT_SEND_TIMER_OUT,1000*45,bt_atcmd_riopen_timer_out);
 		}
+
 	}
+	return CMD_RSP_OK;
 }
 
 //AT+RISEND=1,2,512,f16asd4f5asd544
-char *risendBuff = NULL;
+char risendBuff[1024*5] = {0};
 void bt_atcmd_risend_timer_out(void)
 {
-	if(risendBuff == NULL)
+	if(strlen(risendBuff) == 0)
 	{
 		//atcmd_put_data_string("SEND OK");
 	}
@@ -1473,12 +1458,75 @@ BT_CMD_RSP atcmd_riclose(custom_cmdLine *cmd_line)
 		YeeLink_CloseSocket();
 		atcmd_put_data_string("OK");
 	}
+	return CMD_RSP_OK;
 }
+//AT+RISET=0,"TCP","192.168.0.10",80
+//AT+RISET=0,"TCP","www.baidu.com",80
+//AT+RISET=0,"UDP","192.168.0.10",5353
+BT_CMD_RSP atcmd_riset(custom_cmdLine *cmd_line)
+{
+	YeeLinkStruct *p = &gYeeLinkSoc;
+	sockaddr_struct addr={0};
+	char tcp_udp[10]={0};
+	char ip_domain[50]={0};
+	int port;
+	int _ip[6]={0};
+	//先关闭上一条socket。
+	YeeLink_CloseSocket();
+	if(nmea_scanf(cmd_line->character,strlen(cmd_line->character),"AT+RISET=0,\"%s\",\"%s\",%d",tcp_udp,ip_domain,&port))
+	{
+		if(!strcmp(tcp_udp,"TCP"))
+		{
+			addr.sock_type = SOC_SOCK_STREAM;
+		}
+		else
+		{
+			addr.sock_type = SOC_SOCK_DGRAM;
+		}
+		if (4==sscanf(ip_domain,"%d.%d.%d.%d",&_ip[0],&_ip[1],&_ip[2],&_ip[3])) {
+
+		        if (0<=_ip[0] && _ip[0]<=255
+
+		         && 0<=_ip[1] && _ip[1]<=255
+
+		         && 0<=_ip[2] && _ip[2]<=255
+
+		         && 0<=_ip[3] && _ip[3]<=255) 
+		         {
+				//有效IP
+				addr.addr[0]=_ip[0];
+				addr.addr[1]=_ip[1];
+				addr.addr[2]=_ip[2];
+				addr.addr[3]=_ip[3];
+				addr.addr_len=4;
+				addr.port=port;
+				//memcpy(&p->addr2,&addr,sizeof(sockaddr_struct));
+				YeeLink_SetAddr(addr);
+				atcmd_put_data_string("OK");
+		        }
+		        else 
+		        {
+		        	char ip_domain_tmp[50]={0};
+				YeeLink_GetHostByName(ip_domain,ip_domain_tmp);
+		        }
+
+		    } 
+		    else 
+		    {
+		        	char ip_domain_tmp[50]={0};
+				YeeLink_GetHostByName(ip_domain,ip_domain_tmp);
+		    }
+
+	}
+	return CMD_RSP_OK;
+}
+
 //AT+RISEND=<index>,<count>,<length>,"<content>
 //AT+RISEND=1,1,20,ABCDEFG1234567890123
+//AT+RISEND=<socket index>,<index>,<count>,<length>,"<content>"
 BT_CMD_RSP atcmd_risend(custom_cmdLine *cmd_line)
 {
-	int soc_index,CountPacket,lenth;
+	int soc_index,CountPacket,lenth,CountPacketIndex;
 	char mode[20]={0};
 	sockaddr_struct addr={0};
 	int port;
@@ -1487,7 +1535,7 @@ BT_CMD_RSP atcmd_risend(custom_cmdLine *cmd_line)
 	YeeLinkStruct *p = &gYeeLinkSoc;
 	U32 newLenth;
 
-	if(nmea_scanf(cmd_line->character,strlen(cmd_line->character),"AT+RISEND=%d,%d,%d,",&soc_index,&CountPacket,&lenth))
+	if(nmea_scanf(cmd_line->character,strlen(cmd_line->character),"AT+RISEND=%d,%d,%d,%d",&soc_index,&CountPacketIndex,&CountPacket,&lenth))
 	{
 
 		ptr = strstr(cmd_line->character,",")+1;
@@ -1497,8 +1545,8 @@ BT_CMD_RSP atcmd_risend(custom_cmdLine *cmd_line)
 			if(ptr != NULL)
 			{
 				ptr = strstr(ptr,",")+1;
-				if(risendBuff == NULL)
-				risendBuff = (U8 *)med_alloc_ext_mem(MAX_SOC_BUFFER_SIZE*5);
+
+				ptr = strstr(ptr,",")+2;
 
 				memcpy(risendBuff,ptr,lenth);
 
@@ -1519,6 +1567,7 @@ BT_CMD_RSP atcmd_risend(custom_cmdLine *cmd_line)
 			}
 		}
 	}
+	return CMD_RSP_OK;
 }
 BT_CMD_RSP atcmd_cgact(custom_cmdLine *cmd_line)
 {
@@ -1539,6 +1588,7 @@ BT_CMD_RSP atcmd_cgact(custom_cmdLine *cmd_line)
 			StartTimer(BT_AT_ADD_TIMER_2,1000*45,bt_atcmd_cgact_timer_out);
 		}
 	}
+	return CMD_RSP_OK;
 }
 BT_CMD_RSP atcmd_get_gps_openOrClose(custom_cmdLine *cmd_line)
 {
@@ -1725,6 +1775,8 @@ const bt_custom_atcmd bt_custom_cmd_table[ ] =
 
 	{"AT+RISEND",atcmd_risend},
     	{"AT+RICLOSE",atcmd_riclose},
+    	{"AT+RISET",atcmd_riset},
+
 	//{"AT+CGSN",atcmd_get_imei},
 	//{"AT+CIMI",atcmd_get_imsi},
     {NULL, NULL}

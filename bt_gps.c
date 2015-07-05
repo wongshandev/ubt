@@ -4,7 +4,7 @@
 
 btGPSInfo GPSInfo = {0};
 U8 * ubloxAssitBuff = NULL;
-U8 * soc_rev_buff = NULL;
+U8 soc_rev_buff[1024*5] = {0};
 U32	soc_rev_lenth = 0;
 
 int nmea_scanf(const char *buff, int buff_sz, const char *format, ...);
